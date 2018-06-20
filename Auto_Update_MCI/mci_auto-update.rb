@@ -136,28 +136,46 @@ define launch($param_ami_prefix, $param_mci_name, $param_frequency, $param_first
   $use_cloud_href = "/api/clouds/1/"
   $usw_cloud_href = "/api/clouds/3/"
   $euc_cloud_href = "/api/clouds/9/"
-  @images = @mci.settings().image()
+  @settings = @mci.settings()
   @use_image = rs_cm.images.empty()
   @usw_image = rs_cm.images.empty()
   @euc_image = rs_cm.images.empty()
-  foreach @image in @images do
-    $href = @image.href
-    if $href =~ $use_cloud_href
-      @use_image = @image
-    elsif $href =~ $usw_cloud_href
-      @usw_image = @image
-    elsif $href =~ $euc_cloud_href
-      @euc_image = @image
-    else
-      #skip
+  foreach @setting in @settings do
+    sub on_error: skip do
+    	@image = @setting.image()
+      $href = @image.href
+      if $href =~ $use_cloud_href
+        @use_image = @image
+      elsif $href =~ $usw_cloud_href
+        @usw_image = @image
+      elsif $href =~ $euc_cloud_href
+        @euc_image = @image
+      else
+        #skip
+      end
     end
   end
-  $use_ami_id = @use_image.resource_uid
-  $use_ami_name = @use_image.name
-  $usw_ami_id = @usw_image.resource_uid
-  $usw_ami_name = @usw_image.name
-  $euc_ami_id = @euc_image.resource_uid
-  $euc_ami_name = @euc_image.name
+  if empty?(@use_image)
+    $use_ami_id = "DEREGISTERED/DELETED"
+    $use_ami_name = "DEREGISTERED/DELETED"
+  else
+    $use_ami_id = @use_image.resource_uid
+    $use_ami_name = @use_image.name
+  end
+  if empty?(@usw_image)
+    $usw_ami_id = "DEREGISTERED/DELETED"
+    $usw_ami_name = "DEREGISTERED/DELETED"
+  else
+    $usw_ami_id = @usw_image.resource_uid
+    $usw_ami_name = @usw_image.name
+  end
+  if empty?(@euc_image)
+    $euc_ami_id = "DEREGISTERED/DELETED"
+    $euc_ami_name = "DEREGISTERED/DELETED"
+  else
+    $euc_ami_id = @euc_image.resource_uid
+    $euc_ami_name = @euc_image.name
+  end
 
 end
 
@@ -171,36 +189,49 @@ define scan_and_update($param_ami_prefix, $param_mci_name) return $last_updated,
   $use_cloud_href = "/api/clouds/1/"
   $usw_cloud_href = "/api/clouds/3/"
   $euc_cloud_href = "/api/clouds/9/"
-  @mci_images = @mci.settings().image()
-  call sys_log.detail("MCI IMAGES: "+to_s(to_object(@mci_images)))
   @use_image = rs_cm.images.empty()
   @usw_image = rs_cm.images.empty()
   @euc_image = rs_cm.images.empty()
-  foreach @image in @mci_images do
-    $href = @image.href
-    if $href =~ $use_cloud_href
-      @use_image = @image
-      call sys_log.detail("USE IMAGE OBJECT: "+to_s(to_object(@use_image)))
-    elsif $href =~ $usw_cloud_href
-      @usw_image = @image
-      call sys_log.detail("USW IMAGE OBJECT: "+to_s(to_object(@usw_image)))
-    elsif $href =~ $euc_cloud_href
-      @euc_image = @image
-      call sys_log.detail("EUC IMAGE OBJECT: "+to_s(to_object(@euc_image)))
-    else
-      #skip
+  foreach @setting in @settings do
+    sub on_error: skip do
+    	@image = @setting.image()
+      $href = @image.href
+      if $href =~ $use_cloud_href
+        @use_image = @image
+      elsif $href =~ $usw_cloud_href
+        @usw_image = @image
+      elsif $href =~ $euc_cloud_href
+        @euc_image = @image
+      else
+        #skip
+      end
     end
   end
-  $use_ami_id = @use_image.resource_uid
-  $use_ami_name = @use_image.name
+  if empty?(@use_image)
+    $use_ami_id = "DEREGISTERED/DELETED"
+    $use_ami_name = "DEREGISTERED/DELETED"
+  else
+    $use_ami_id = @use_image.resource_uid
+    $use_ami_name = @use_image.name
+  end
   call sys_log.detail("USE IMAGE UID: "+$use_ami_id)
   call sys_log.detail("USE IMAGE NAME: "+$use_ami_name)
-  $usw_ami_id = @usw_image.resource_uid
-  $usw_ami_name = @usw_image.name
+  if empty?(@usw_image)
+    $usw_ami_id = "DEREGISTERED/DELETED"
+    $usw_ami_name = "DEREGISTERED/DELETED"
+  else
+    $usw_ami_id = @usw_image.resource_uid
+    $usw_ami_name = @usw_image.name
+  end
   call sys_log.detail("USW IMAGE UID: "+$usw_ami_id)
   call sys_log.detail("USW IMAGE NAME: "+$usw_ami_name)
-  $euc_ami_id = @euc_image.resource_uid
-  $euc_ami_name = @euc_image.name
+  if empty?(@euc_image)
+    $euc_ami_id = "DEREGISTERED/DELETED"
+    $euc_ami_name = "DEREGISTERED/DELETED"
+  else
+    $euc_ami_id = @euc_image.resource_uid
+    $euc_ami_name = @euc_image.name
+  end
   call sys_log.detail("EUC IMAGE UID: "+$euc_ami_id)
   call sys_log.detail("EUC IMAGE NAME: "+$euc_ami_name)
 
@@ -249,9 +280,10 @@ define scan_and_update($param_ami_prefix, $param_mci_name) return $last_updated,
     #Update MCI
     @use_setting = rs_cm.multi_cloud_image_settings.empty()
     foreach @setting in @settings do
-      if @setting.image().resource_uid == $use_ami_id
+      $setting = to_object(@setting)
+      if $setting["details"][0]["links"][1]["href"] =~ $use_cloud_href
         @use_setting = @setting
-        call sys_log.detail("USE MCI SETTING: "+to_s(to_object(@use_setting)))
+        call sys_log.detail("USE MCI SETTING: "+to_s($setting))
       end
     end
     if size(@use_setting) == 1
@@ -309,9 +341,10 @@ define scan_and_update($param_ami_prefix, $param_mci_name) return $last_updated,
     #Update MCI
     @usw_setting = rs_cm.multi_cloud_image_settings.empty()
     foreach @setting in @settings do
-      if @setting.image().resource_uid == $usw_ami_id
+      $setting = to_object(@setting)
+      if $setting["details"][0]["links"][1]["href"] =~ $usw_cloud_href
         @usw_setting = @setting
-        call sys_log.detail("USW MCI SETTING: "+to_s(to_object(@usw_setting)))
+        call sys_log.detail("USE MCI SETTING: "+to_s($setting))
       end
     end
     if size(@usw_setting) == 1
@@ -369,9 +402,10 @@ define scan_and_update($param_ami_prefix, $param_mci_name) return $last_updated,
     #Update MCI
     @euc_setting = rs_cm.multi_cloud_image_settings.empty()
     foreach @setting in @settings do
-      if @setting.image().resource_uid == $euc_ami_id
+      $setting = to_object(@setting)
+      if $setting["details"][0]["links"][1]["href"] =~ $euc_cloud_href
         @euc_setting = @setting
-        call sys_log.detail("EUC MCI SETTING: "+to_s(to_object(@euc_setting)))
+        call sys_log.detail("USE MCI SETTING: "+to_s($setting))
       end
     end
     if size(@euc_setting) == 1
